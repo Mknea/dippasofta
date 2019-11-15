@@ -64,6 +64,47 @@ def parse_load(data, src):
     standard_gateway = None
     try:
         data = hexlify(data)
+        print(data)
+        print(data[0:8])
+        # First 8 bytes are followed by the length of the rest of the message:
+        PROFINET_DCPDataLength = int(data[20:24], 16) # Number of bytes after this value
+
+        # Each block starts with 1 byte for device options and 1 byte for suboptions
+        # afterwards follows 2 bytes for the length of the rest of the block
+        block_bounds = [[0] * 2 for i in range(7)]
+        block_bounds[0][0] = 24
+        print(block_bounds)
+        print(data[28:32])
+        print(int(data[28 : 32], 16))
+        print(int(data[(block_bounds[0][0] + 4) : (block_bounds[0][0] + 8)], 16))
+        print("block bounds: {0}".format(block_bounds[0][0] + 8 + int(data[(block_bounds[0][0] + 4) : (block_bounds[0][0] + 8)], 16)))
+        for i in range (7):
+            print("Block start: ", data[block_bounds[i][0]-4: block_bounds[i][0]])
+            print("Length: ", data[(block_bounds[i][0] + 4) : (block_bounds[i][0] + 8)])
+            block_bounds[i][1] = block_bounds[i][0] + 8 + int(data[(block_bounds[i][0] + 4) : (block_bounds[i][0] + 8)], 16)*2
+            print("Block End:", data[block_bounds[i][1]-4: block_bounds[i][1]])
+            if (i < 6):
+                if block_bounds[i][1] % 2 != 0:
+                    block_bounds[i+1][0] = block_bounds[i][1] + 5
+                else:
+                    block_bounds[i+1][0] = block_bounds[i][1] + 4
+        print(block_bounds)
+
+        Device_options_block_length = int(data[28:32])
+        profinet_packet = {
+            "Device_options_block": data[24:(24 + 6 + Device_options_block_length)],
+            "Device_specific_block": None,
+            "Device_nameofstation_block": None,
+            "Device_ID_block": None,
+            "Device_role_block": None,
+            "Device_instance_block": None,
+            "IP_block": None
+        }
+        #print(profinet_packet)
+        #print(Device_options_block_length)
+        #print(profinet_packet["Device_options_block"])
+
+
         PROFINET_DCPDataLength = int(data[20:24], 16)
         start_of_Block_Device_Options = 24
         Block_Device_Options_DCPBlockLength = int(data[start_of_Block_Device_Options + 2*2:start_of_Block_Device_Options + 4*2], 16)
@@ -86,21 +127,25 @@ def parse_load(data, src):
         padding = Block_DeviceID_DCPBlockLength%2
 
         start_of_Block_DeviceRole = start_of_Block_Device_ID + Block_DeviceID_DCPBlockLength*2 + (4+padding)*2
+        print("Start of devicerole block: ", data[start_of_Block_DeviceRole])
         Block_DeviceRole_DCPBlockLength = int(data[start_of_Block_DeviceRole+2*2:start_of_Block_DeviceRole+4*2], 16)
         device_role = data[start_of_Block_DeviceRole+4*2:start_of_Block_DeviceRole+4*2+Block_DeviceRole_DCPBlockLength*2][4:6]
         
         padding = Block_DeviceRole_DCPBlockLength%2
 
         start_of_Block_IPset = start_of_Block_DeviceRole + Block_DeviceRole_DCPBlockLength*2 + (4+padding)*2
+        print("Start of IPset block: ", data[start_of_Block_IPset])
         Block_IPset_DCPBlockLength = int(data[start_of_Block_IPset+2*2:start_of_Block_IPset+4*2], 16)
         __tmp = data[start_of_Block_IPset+4*2:start_of_Block_IPset+4*2+Block_IPset_DCPBlockLength*2][4:]
+        print("__tmp: " + __tmp)
         ip_address_hex, subnet_mask_hex, standard_gateway_hex = __tmp[:8], __tmp[8:16], __tmp[16:]
         ip_address = socket.inet_ntoa(struct.pack(">L", int(ip_address_hex, 16)))
-        print(subnet_mask_hex)
-        subnet_mask = socket.inet_ntoa(struct.pack(">L", int(subnet_mask_hex, 64)))#16)))
-        #subnet_mask = subnet_mask_hex
-        standard_gateway = socket.inet_ntoa(struct.pack(">L", int(standard_gateway_hex, 16)))
         
+        print("ip_address_hex: " + ip_address_hex + " subnet_mask_hex: " + subnet_mask_hex + " standard_gateway_hex: " + standard_gateway_hex)
+        #subnet_mask = socket.inet_ntoa(struct.pack(">L", int(subnet_mask_hex, 16)))
+        subnet_mask = None
+        #standard_gateway = socket.inet_ntoa(struct.pack(">L", int(standard_gateway_hex, 16)))
+        standard_gateway = None
         tos = data[start_of_Block_Device_Specific+4*2 : start_of_Block_Device_Specific+4*2+Block_Device_Specific_DCPBlockLength*2][4:]
         nos = data[start_of_Block_NameOfStation+4*2 : start_of_Block_NameOfStation+4*2+Block_NameOfStation_DCPBlockLength*2][4:]
         type_of_station = unhexlify(tos)
@@ -135,15 +180,15 @@ if __name__ == '__main__':
     parser.add_argument('-i', dest="src_iface", default="", help="source network interface")
     parser.add_argument('-v', dest="verbose", default=False, help="verbose mode")
     args = parser.parse_args()
-
+    if args.verbose.lower() == "true":
+        args.verbose = True
     # Get the interface from user or use the first found interface
     src_iface = args.src_iface or get_src_iface()
     # Get MAC address for given interface
     src_mac = get_src_mac(src_iface)
 
     if (args.verbose == True):
-        print("""   Source interface: {0}\n
-                    Source MAC: {1}""".format(src_iface, src_mac))
+        print("{0:20}: {1}\n{2:20}: {3}".format("Source interface", src_iface, "Source MAC", src_mac))
 
     # run sniffer
     t = threading.Thread(target=sniff_packets, args=(src_iface,))
