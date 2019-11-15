@@ -22,20 +22,28 @@ import string
 import socket
 import struct
 import uuid
-import optparse
 from binascii import hexlify, unhexlify
 from scapy.all import conf, sniff, srp, Ether
+import csv
+import netifaces
+import argparse
 
 cfg_dst_mac = '01:0e:cf:00:00:00' # Siemens family
 cfg_sniff_time = 2 # seconds
 
 sniffed_packets = None
+args = None
 
 def get_src_iface():
     return conf.iface
 
-def get_src_mac():
-    return ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
+def get_src_mac(interface):
+    # Returns first MAC address found for given ETHERNET interface
+    try:
+        return netifaces.ifaddresses(interface)[netifaces.AF_LINK][0]['addr']
+    except ValueError:
+        print("Error: You must specify a valid interface name.")
+        sys.exit(1)
 
 def sniff_packets(src_iface):
     global sniffed_packets
@@ -89,8 +97,8 @@ def parse_load(data, src):
         ip_address_hex, subnet_mask_hex, standard_gateway_hex = __tmp[:8], __tmp[8:16], __tmp[16:]
         ip_address = socket.inet_ntoa(struct.pack(">L", int(ip_address_hex, 16)))
         print(subnet_mask_hex)
-        #subnet_mask = socket.inet_ntoa(struct.pack(">L", int(subnet_mask_hex, 64)))#16)))
-        subnet_mask = subnet_mask_hex
+        subnet_mask = socket.inet_ntoa(struct.pack(">L", int(subnet_mask_hex, 64)))#16)))
+        #subnet_mask = subnet_mask_hex
         standard_gateway = socket.inet_ntoa(struct.pack(">L", int(standard_gateway_hex, 16)))
         
         tos = data[start_of_Block_Device_Specific+4*2 : start_of_Block_Device_Specific+4*2+Block_Device_Specific_DCPBlockLength*2][4:]
@@ -102,22 +110,41 @@ def parse_load(data, src):
         if not is_printable(name_of_station):
             name_of_station = 'not printable'
     except:
-        print("%s:\n %s \n At line: %s" %(src, str(sys.exc_info()), str(sys.exc_info()[2].tb_lineno)))
+        if args.verbose == True:
+            print("%s:\n %s At line: %s" %(src, str(sys.exc_info()), str(sys.exc_info()[2].tb_lineno)))
     return type_of_station, name_of_station, vendor_id, device_id, device_role, ip_address, subnet_mask, standard_gateway
 
+#def create_packet_payload():
+#    pass
 
-def create_packet_payload():
-    pass
+def check_vendor_id(id):
+    try:
+        with open('vendor_ID_table.csv', mode='r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            for row in csv_reader:
+                    if id < int(row["Vendor ID"]):
+                        return ""
+                    elif id == int(row["Vendor ID"]):
+                        return row[" Vendor name"].strip()
+    except EnvironmentError:
+        print("VendorID table not provided.")
 
 if __name__ == '__main__':
-    src_mac = get_src_mac()
-    parser = optparse.OptionParser()
-    parser.add_option('-i', dest="src_iface", 
-                      default="", help="source network interface")
-    options, args = parser.parse_args()
-    
-    src_iface = options.src_iface or get_src_iface()
-    
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', dest="src_iface", default="", help="source network interface")
+    parser.add_argument('-v', dest="verbose", default=False, help="verbose mode")
+    args = parser.parse_args()
+
+    # Get the interface from user or use the first found interface
+    src_iface = args.src_iface or get_src_iface()
+    # Get MAC address for given interface
+    src_mac = get_src_mac(src_iface)
+
+    if (args.verbose == True):
+        print("""   Source interface: {0}\n
+                    Source MAC: {1}""".format(src_iface, src_mac))
+
     # run sniffer
     t = threading.Thread(target=sniff_packets, args=(src_iface,))
     t.setDaemon(True)
@@ -126,13 +153,12 @@ if __name__ == '__main__':
     # create and send broadcast profinet packet
     payload =  'fefe 05 00 04010002 0080 0004 ffff '
     payload = payload.replace(' ', '')
-
     pp = Ether(type=0x8892, src=src_mac, dst=cfg_dst_mac)/payload.decode('hex')
-    ans, unans = srp(pp)
+    #pp.show2()
+    ans, unans = srp(pp, iface=src_iface)
 
     # wait sniffer...
     t.join()
-
     # parse and print result
     result = {}
     for p in sniffed_packets:
@@ -149,13 +175,16 @@ if __name__ == '__main__':
             result[p.src]['standard_gateway'] = standard_gateway
 
     print "found %d devices" % len(result)
-    print "{0:17} : {1:15} : {2:15} : {3:9} : {4:9} : {5:11} : {6:15} : {7:15} : {8:15}".format('mac address', 'type of station', 
+    print "{0:17} : {1:15} : {2:15} : {3:20} : {4:9} : {5:11} : {6:15} : {7:15} : {8:15}".format('mac address', 'type of station', 
                                                                                               'name of station', 'vendor id', 
                                                                                               'device id', 'device role', 'ip address',
                                                                                               'subnet mask', 'standard gateway')
     for (mac, profinet_info) in result.items():
         p = result[mac]
-        print "{0:17} : {1:15} : {2:15} : {3:9} : {4:9} : {5:11} : {6:15} : {7:15} : {8:15}".format(mac, 
+        vendor = check_vendor_id(int(p['vendor_id'], 16))
+        if vendor != "":
+            p['vendor_id'] = p['vendor_id'] + " (" + vendor + ")"
+        print "{0:17} : {1:15} : {2:15} : {3:20} : {4:9} : {5:11} : {6:15} : {7:15} : {8:15}".format(mac, 
                                                                                                 p['type_of_station'], 
                                                                                                 p['name_of_station'], 
                                                                                                 p['vendor_id'],
