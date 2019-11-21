@@ -23,11 +23,12 @@ import socket
 import struct
 import uuid
 from binascii import hexlify, unhexlify
-from scapy.all import conf, sniff, srp, Ether
+from scapy.all import conf, sniff, srp, Ether, Dot1Q
 import csv
 import netifaces
 import argparse
 from texttable import Texttable
+import binascii
 
 cfg_dst_mac = '01:0e:cf:00:00:00' # Siemens family
 cfg_sniff_time = 2 # seconds
@@ -97,10 +98,12 @@ def parse_load(data, src):
             "Device_instance":        data[block_bounds[5][0]:block_bounds[5][1]],
             "IP":                     data[block_bounds[6][0]:block_bounds[6][1]]
         }
+        print(profinet_packet)
         def get_block_length(key):
             return (int(profinet_packet[key][4:8], 16))*2
         
-        type_of_station = unhexlify(profinet_packet["Device_specific"][8:8+get_block_length("Device_specific")]).strip("\0")
+        type_of_station = profinet_packet["Device_specific"][8:8+get_block_length("Device_specific")].strip("\0")
+        print(type_of_station)
         name_of_station = unhexlify(profinet_packet["Device_nameofstation"][8:8+get_block_length("Device_nameofstation")]).strip("\0")
         vendor_id = profinet_packet["Device_ID"][(8+4):(8+4+(get_block_length("Device_ID")-4)/2)]
         device_id = profinet_packet["Device_ID"][8+4+(get_block_length("Device_ID")-4)/2:8+(get_block_length("Device_ID"))]
@@ -155,8 +158,9 @@ if __name__ == '__main__':
     # create and send broadcast profinet packet
     payload =  'fefe 05 00 04010002 0080 0004 ffff '
     payload = payload.replace(' ', '')
-    pp = Ether(type=0x8892, src=src_mac, dst=cfg_dst_mac)/payload.decode('hex')
-    #pp.show2()
+    payload = binascii.a2b_hex(payload)
+    pp = Ether(type=0x8892, src=src_mac, dst=cfg_dst_mac)/payload
+    pp.show2()
     ans, unans = srp(pp, iface=src_iface)
 
     # wait sniffer...
@@ -164,7 +168,11 @@ if __name__ == '__main__':
     # parse and print result
     result = {}
     for p in sniffed_packets:
-        if hex(p.type) == '0x8892' and p.src != src_mac:
+        if sys.version_info[0] >= 3:
+            frametype = hex(p[Dot1Q].type).strip()
+        else:
+            frametype = hex(p.type)
+        if frametype == '0x8892' and p.src != src_mac:
             result[p.src] = {'load': p.load}
             type_of_station, name_of_station, vendor_id, device_id, device_role, ip_address, subnet_mask, standard_gateway = parse_load(p.load, p.src)
             result[p.src]['type_of_station'] = type_of_station
@@ -176,10 +184,9 @@ if __name__ == '__main__':
             result[p.src]['subnet_mask'] = subnet_mask
             result[p.src]['standard_gateway'] = standard_gateway
 
-    print "found %d devices" % len(result)
+    print("found {:d} devices".format(len(result)))
     t = Texttable()
     t.add_row(['mac address', 'type of station', 'name of station', 'vendor id', 'device id', 'device role', 'ip address', 'subnet mask', 'standard gateway'])
-    print "Type of station lenght:" + str(len('type_of_station'))
     for (mac, profinet_info) in result.items():
         p = result[mac]
         vendor = check_vendor_id(int(p['vendor_id'], 16))
