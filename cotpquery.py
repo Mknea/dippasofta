@@ -8,8 +8,9 @@ import argparse
 from binascii import hexlify, unhexlify
 from robot.api.deco import keyword          # Modifying Robot Framework keyword call
 from texttable import Texttable             # Printing result to table
+from robot.api import logger 
 
-def getInfoViaCOTP(targetIP):
+def getInfoViaCOTP(targetIP, calledbyrobot):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(1) # 1 second timeout
     sock.connect((targetIP, 102)) ## Will setup TCP/SYN with port 102
@@ -23,7 +24,7 @@ def getInfoViaCOTP(targetIP):
     cotpdata = send_and_recv(sock, '030000'+tpktlength+'02f080'+data)
     #print(cotpdata)
     ## It is sure that the CPU state is NOT in this response
-    parse_and_log_results(cotpdata)
+    parse_and_log_results(cotpdata, calledbyrobot)
     sock.close()
 
 def send_and_recv(sock, strdata, sendOnly = False):
@@ -33,7 +34,7 @@ def send_and_recv(sock, strdata, sendOnly = False):
     ret = sock.recv(65000)
     return ret
 
-def parse_and_log_results(data):
+def parse_and_log_results(data, calledbyrobot):
     t = Texttable()
     t.add_row(['Hardware ID', 'Firmware version'])
     hardware = data.split(';')[2]
@@ -41,7 +42,10 @@ def parse_and_log_results(data):
     t.add_row([hardware, firmware])
     t.set_max_width(0)
     t.set_cols_dtype(["t", "t"])
-    print(t.draw())
+    if (calledbyrobot):
+        logger.warn("\n" + t.draw())
+    else:
+        print(t.draw())
 
 def isIpv4(ip):
     match = re.match("^(\d{0,3})\.(\d{0,3})\.(\d{0,3})\.(\d{0,3})$", ip)
@@ -59,6 +63,7 @@ def isIpv4(ip):
 
 @keyword(name='Send COTP query')
 def main(IP = ""):
+    calledbyrobot = False
     if IP == "":
         parser = argparse.ArgumentParser()
         parser.add_argument('-ip', dest="targetIP", default=None, help="target device IP address")
@@ -68,11 +73,13 @@ def main(IP = ""):
             sys.exit()
         else:
             IP = args.targetIP
+    else:
+        calledbyrobot = True
     if not isIpv4(IP):
         print('One or more addresses were wrong. \nPlease go read RFC 791 and then use a legitimate IPv4 address.')
         sys.exit()
     
-    getInfoViaCOTP(IP)
+    getInfoViaCOTP(IP, calledbyrobot)
 
 if __name__ == "__main__":
     main()
