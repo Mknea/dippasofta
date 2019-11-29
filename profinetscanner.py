@@ -184,7 +184,6 @@ def log_results(resultDict, calledByRobot = False):
     :param calledFromCommandPrompt: Bool, Used to signal the need to print with warning status (for robot). Default false.
     '''
     print("found {:d} devices".format(len(resultDict)))
-    print(resultDict)
     t = Texttable()
     t.add_row(['mac address', 'type of station', 'name of station', 'vendor id', 'device id', 'device role', 'ip address', 'subnet mask', 'standard gateway'])
     for (mac, profinet_info) in resultDict.items():
