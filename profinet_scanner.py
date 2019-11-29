@@ -1,18 +1,16 @@
 #!/usr/bin/env python
 
 """
+File:   profinet_scanner.py
+Desc:   Scan subnet and find profinet-enabled devices (PLC, HMI), PC workstations.
+        Extract network info, names, roles.
 Source: https://github.com/atimorin/scada-tools/blob/master/profinet_scanner.scapy.py
-File: profinet_scanner.py
-Desc: Scan subnet and find profinet-enabled devices (PLC, HMI), PC workstations.
-      Extract network info, names, roles.
 """
 
-__author__ = "Aleksandr Timorin"
+__authors__ = "Aleksi Makinen and Aleksandr Timorin"
 __copyright__ = "Copyright 2013, Positive Technologies"
 __license__ = "GNU GPL v3"
-__version__ = "1.1"
-__maintainer__ = "Aleksandr Timorin"
-__email__ = "atimorin@gmail.com"
+__version__ = "2.0"
 __status__ = "Development"
 
 import sys
@@ -27,8 +25,10 @@ from scapy.all import conf, sniff, srp, Ether, Dot1Q
 import csv
 import netifaces
 import argparse
-from texttable import Texttable
+from texttable import Texttable # Result printing
 import binascii
+#from logging import warn        # For Robot Framework prints 
+from robot.api import logger
 
 cfg_dst_mac = '01:0e:cf:00:00:00' # Siemens family
 cfg_sniff_time = 2 # seconds
@@ -98,12 +98,12 @@ def parse_load(data, src):
             "Device_instance":        data[block_bounds[5][0]:block_bounds[5][1]],
             "IP":                     data[block_bounds[6][0]:block_bounds[6][1]]
         }
-        print(profinet_packet)
+        #print(profinet_packet)
         def get_block_length(key):
             return (int(profinet_packet[key][4:8], 16))*2
         
-        type_of_station = profinet_packet["Device_specific"][8:8+get_block_length("Device_specific")].strip("\0")
-        print(type_of_station)
+        type_of_station = unhexlify(profinet_packet["Device_specific"][8:8+get_block_length("Device_specific")]).strip("\0")
+        #print(type_of_station)
         name_of_station = unhexlify(profinet_packet["Device_nameofstation"][8:8+get_block_length("Device_nameofstation")]).strip("\0")
         vendor_id = profinet_packet["Device_ID"][(8+4):(8+4+(get_block_length("Device_ID")-4)/2)]
         device_id = profinet_packet["Device_ID"][8+4+(get_block_length("Device_ID")-4)/2:8+(get_block_length("Device_ID"))]
@@ -118,11 +118,16 @@ def parse_load(data, src):
         standard_gateway = transform_to_address(profinet_packet["IP"][28:36])
 
     except:
-        if args.verbose == True:
-            print("%s:\n %s At line: %s" %(src, str(sys.exc_info()), str(sys.exc_info()[2].tb_lineno)))
+        if (args != None):
+            if args.verbose == True:
+                print("%s:\n %s At line: %s" %(src, str(sys.exc_info()), str(sys.exc_info()[2].tb_lineno)))
     return type_of_station, name_of_station, vendor_id, device_id, device_role, ip_address, subnet_mask, standard_gateway
 
 def check_vendor_id(id):
+    '''
+    Compares the given vendor id (as dec integer) against CSV-table with vendor names tied to id's.
+    Returns the name as string on success, and otherwise an empty string. 
+    '''
     try:
         with open('vendor_ID_table.csv', mode='r') as csv_file:
             csv_reader = csv.DictReader(csv_file)
@@ -133,6 +138,96 @@ def check_vendor_id(id):
                         return row[" Vendor name"].strip()
     except EnvironmentError:
         print("VendorID table not provided.")
+
+
+def send_message(src_mac, cfg_dst_mac, src_iface):
+    ''' Create and send broadcast profinet packet '''
+    payload =  'fefe 05 00 04010002 0080 0004 ffff '
+    payload = payload.replace(' ', '')
+    payload = binascii.a2b_hex(payload)
+    pp = Ether(type=0x8892, src=src_mac, dst=cfg_dst_mac)/payload
+    if (args != None):
+        if args.verbose.lower() == True:
+            pp.show2()
+    ans, unans = srp(pp, iface=src_iface)
+
+
+def parse_results(src_mac):
+    '''
+    Checks that messagetype and sender match, and calls parser.
+    Returns the results as dictionary with each separate response as its own key-dict pair.
+    '''
+    result = {}
+    for p in sniffed_packets:
+        if sys.version_info[0] >= 3:
+            frametype = hex(p[Dot1Q].type).strip()
+        else:
+            frametype = hex(p.type)
+        if frametype == '0x8892' and p.src != src_mac:
+            result[p.src] = {'load': p.load}
+            type_of_station, name_of_station, vendor_id, device_id, device_role, ip_address, subnet_mask, standard_gateway = parse_load(p.load, p.src)
+            result[p.src]['type_of_station'] = type_of_station
+            result[p.src]['name_of_station'] = name_of_station
+            result[p.src]['vendor_id'] = vendor_id
+            result[p.src]['device_id'] = device_id
+            result[p.src]['device_role'] = device_role
+            result[p.src]['ip_address'] = ip_address
+            result[p.src]['subnet_mask'] = subnet_mask
+            result[p.src]['standard_gateway'] = standard_gateway
+    return result
+
+def log_results(resultDict, calledByRobot = False):
+    '''
+    Logs the results to console
+    :param resultDict: Dictionary containing dictionarys for each received correct message
+    :param calledFromCommandPrompt: Bool, Used to signal the need to print with warning status (for robot). Default false.
+    '''
+    print("found {:d} devices".format(len(resultDict)))
+    t = Texttable()
+    t.add_row(['mac address', 'type of station', 'name of station', 'vendor id', 'device id', 'device role', 'ip address', 'subnet mask', 'standard gateway'])
+    for (mac, profinet_info) in resultDict.items():
+        p = resultDict[mac]
+        vendor = check_vendor_id(int(p['vendor_id'], 16))
+        if vendor != "":
+            p['vendor_id'] = p['vendor_id'] + " (" + vendor + ")"
+        
+        t.add_row([mac, 
+                p['type_of_station'], 
+                p['name_of_station'], 
+                p['vendor_id'],
+                p['device_id'],
+                p['device_role'],
+                p['ip_address'],
+                p['subnet_mask'],
+                p['standard_gateway']])
+        t.set_max_width(0)
+        t.set_cols_dtype(["t", "t", "t", "t", "t", "t", "t", "t", "t"])
+        if (calledByRobot):
+            logger.warn("\n" + t.draw())
+        else:
+            print(t.draw())
+
+def run_profinet_scanner(src_iface):
+    '''
+    Used when called as python module (by Robot framework), runs the scanner.
+    :param src_iface: The source network interface, for example eth0
+    '''
+    src_mac = get_src_mac(src_iface)
+     # run sniffer
+    t = threading.Thread(target=sniff_packets, args=(src_iface,))
+    t.setDaemon(True)
+    t.start()
+    
+    # send the identity request message
+    send_message(src_mac, cfg_dst_mac, src_iface)
+
+    # wait sniffer...
+    t.join()
+
+    # parse results...
+    result = parse_results(src_mac)
+
+    return result
 
 if __name__ == '__main__':
 
@@ -154,55 +249,16 @@ if __name__ == '__main__':
     t = threading.Thread(target=sniff_packets, args=(src_iface,))
     t.setDaemon(True)
     t.start()
-
-    # create and send broadcast profinet packet
-    payload =  'fefe 05 00 04010002 0080 0004 ffff '
-    payload = payload.replace(' ', '')
-    payload = binascii.a2b_hex(payload)
-    pp = Ether(type=0x8892, src=src_mac, dst=cfg_dst_mac)/payload
-    pp.show2()
-    ans, unans = srp(pp, iface=src_iface)
+    
+    # send the identity request message
+    send_message(src_mac, cfg_dst_mac, src_iface)
 
     # wait sniffer...
     t.join()
-    # parse and print result
-    result = {}
-    for p in sniffed_packets:
-        if sys.version_info[0] >= 3:
-            frametype = hex(p[Dot1Q].type).strip()
-        else:
-            frametype = hex(p.type)
-        if frametype == '0x8892' and p.src != src_mac:
-            result[p.src] = {'load': p.load}
-            type_of_station, name_of_station, vendor_id, device_id, device_role, ip_address, subnet_mask, standard_gateway = parse_load(p.load, p.src)
-            result[p.src]['type_of_station'] = type_of_station
-            result[p.src]['name_of_station'] = name_of_station
-            result[p.src]['vendor_id'] = vendor_id
-            result[p.src]['device_id'] = device_id
-            result[p.src]['device_role'] = device_role
-            result[p.src]['ip_address'] = ip_address
-            result[p.src]['subnet_mask'] = subnet_mask
-            result[p.src]['standard_gateway'] = standard_gateway
 
-    print("found {:d} devices".format(len(result)))
-    t = Texttable()
-    t.add_row(['mac address', 'type of station', 'name of station', 'vendor id', 'device id', 'device role', 'ip address', 'subnet mask', 'standard gateway'])
-    for (mac, profinet_info) in result.items():
-        p = result[mac]
-        vendor = check_vendor_id(int(p['vendor_id'], 16))
-        if vendor != "":
-            p['vendor_id'] = p['vendor_id'] + " (" + vendor + ")"
-        
-        t.add_row([mac, 
-                p['type_of_station'], 
-                p['name_of_station'], 
-                p['vendor_id'],
-                p['device_id'],
-                p['device_role'],
-                p['ip_address'],
-                p['subnet_mask'],
-                p['standard_gateway']])
-        t.set_max_width(0)
-        t.set_cols_dtype(["t", "t", "t", "t", "t", "t", "t", "t", "t"])
-        print(t.draw())
+    # parse results...
+    result = parse_results(src_mac)
+
+    # ...and print them
+    log_results(result)
       
