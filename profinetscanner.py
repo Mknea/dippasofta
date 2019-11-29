@@ -21,14 +21,15 @@ import socket
 import struct
 import uuid
 from binascii import hexlify, unhexlify
+import logging
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import conf, sniff, srp, Ether, Dot1Q
 import csv
 import netifaces
 import argparse
 from texttable import Texttable # Result printing
-import binascii
-#from logging import warn        # For Robot Framework prints 
-from robot.api import logger
+import binascii        
+from robot.api import logger    # For Robot Framework prints
 
 cfg_dst_mac = '01:0e:cf:00:00:00' # Siemens family
 cfg_sniff_time = 2 # seconds
@@ -183,6 +184,7 @@ def log_results(resultDict, calledByRobot = False):
     :param calledFromCommandPrompt: Bool, Used to signal the need to print with warning status (for robot). Default false.
     '''
     print("found {:d} devices".format(len(resultDict)))
+    print(resultDict)
     t = Texttable()
     t.add_row(['mac address', 'type of station', 'name of station', 'vendor id', 'device id', 'device role', 'ip address', 'subnet mask', 'standard gateway'])
     for (mac, profinet_info) in resultDict.items():
