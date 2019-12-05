@@ -143,7 +143,7 @@ def check_vendor_id(id):
 
 def send_message(src_mac, cfg_dst_mac, src_iface):
     ''' Create and send broadcast profinet packet '''
-    payload =  'fefe 05 00 04010002 0080 0004 ffff '
+    payload =  'fefe 05 00 04010002 0080 0004 ffff 0000'
     payload = payload.replace(' ', '')
     payload = binascii.a2b_hex(payload)
     pp = Ether(type=0x8892, src=src_mac, dst=cfg_dst_mac)/payload
