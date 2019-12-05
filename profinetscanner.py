@@ -27,9 +27,10 @@ from scapy.all import conf, sniff, srp, Ether, Dot1Q
 import csv
 import netifaces
 import argparse
-from texttable import Texttable # Result printing
+from texttable import Texttable             # Result printing
 import binascii        
-from robot.api import logger    # For Robot Framework prints
+from robot.api import logger                # For Robot Framework prints
+from robot.api.deco import keyword          # Modifying Robot Framework keyword call
 
 cfg_dst_mac = '01:0e:cf:00:00:00' # Siemens family
 cfg_sniff_time = 2 # seconds
@@ -177,6 +178,7 @@ def parse_results(src_mac):
             result[p.src]['standard_gateway'] = standard_gateway
     return result
 
+@keyword(name='Log PROFINET scan results')
 def log_results(resultDict, calledByRobot = False):
     '''
     Logs the results to console
@@ -208,6 +210,7 @@ def log_results(resultDict, calledByRobot = False):
         else:
             print(t.draw())
 
+@keyword(name='Run PROFINET scanner')
 def run_profinet_scanner(src_iface):
     '''
     Used when called as python module (by Robot framework), runs the scanner.
