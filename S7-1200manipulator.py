@@ -53,7 +53,7 @@ _______________________/-> Credit to Tijl Deneut(c) <-\_______________________
 [*****************************************************************************]
     """
 
-def finish(sMessage='', calledFromCommandPrompt = True):
+def finish(sMessage=''):
     print(str(sMessage))
     sys.exit()
 
@@ -115,14 +115,14 @@ def setupConnection(sIP, iPort):
     if not s7comsetup[18:20] == '00': finish('Some error occured with S7Comm setup, full data: ' + s7comsetup)
     return sock
 
-def printData(sWhat, s7Response): ## Expects 4 byte hex data (e.g. 00000000)
+def printData(sWhat, s7Response, calledByRobot): ## Expects 4 byte hex data (e.g. 00000000)
     if not s7Response[18:20] == '00': finish('Some error occured with S7Comm Setup, full response: ' + str(s7Response) + '\n')
     s7Data = s7Response[14:]
     datalength = int(s7Data[16:20], 16) ## Normally 5 bytes for a byte, 6 if we request word, 8 if we request real
     s7Items = s7Data[28:28 + datalength*2]
     if not s7Items[:2] == 'ff': finish('Some error occured with S7Comm Data Read, full S7Comm data: ' + str(s7Data) + '\nFirmware not supported?\n')
     if calledByRobot:
-        logger.warn('       ###--- ' + sWhat + ' ---###')
+        log = '\n       ###--- ' + sWhat + ' ---###\n'
     else:
         print('       ###--- ' + sWhat + ' ---###')
     sToShow = [''] * 8
@@ -139,12 +139,14 @@ def printData(sWhat, s7Response): ## Expects 4 byte hex data (e.g. 00000000)
             sToShow[j] = sToShow[j] +  str(i) + '.' + str(j) + ': ' + str(bVal) + ' | ' 
     for i in range(0,8):
         if calledByRobot:
-            logger.warn(sToShow[i][:-2])
+            log += sToShow[i][:-2] + "\n"
         else:
             print(sToShow[i][:-2])
+    if calledByRobot:
+        logger.warn(log)
     print('')
 
-def getAllData(sIP, iPort):
+def getAllData(sIP, iPort, calledByRobot = False):
     ## Setup the connection
     sock = setupConnection(sIP, iPort)
     
@@ -155,15 +157,36 @@ def getAllData(sIP, iPort):
     
     ## Get Inputs in Dword (so 32 inputs) starting from Address 0
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 81 000000'.replace(' ','')))
-    printData('Inputs',s7Response)
+    printData('Inputs',s7Response, calledByRobot)
 
     ## Outputs (82)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 82 000000'.replace(' ','')))
-    printData('Outputs',s7Response)
+    printData('Outputs',s7Response, calledByRobot)
 
     ## Merkers (83)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 83 000000'.replace(' ','')))
-    printData('Merkers',s7Response)
+    printData('Merkers',s7Response, calledByRobot)
+    sock.close()
+
+def getOutputData(sIP, iPort):
+    sock = setupConnection(sIP, iPort)
+    ## Outputs (82)
+    s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 82 000000'.replace(' ','')))
+    printData('Outputs',s7Response, True)
+    sock.close()
+
+def getInputData(sIP, iPort):
+    sock = setupConnection(sIP, iPort)
+    ## Inputs (81)
+    s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 81 000000'.replace(' ','')))
+    printData('Inputs',s7Response, calledByRobot)
+    sock.close()
+
+def getMerkerData(sIP, iPort):
+    sock = setupConnection(sIP, iPort)
+    ## Merkers (83)
+    s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 83 000000'.replace(' ','')))
+    printData('Merkers',s7Response, calledByRobot)
     sock.close()
 
 def setOutputs(sIP, iPort, sOutputs):
@@ -213,23 +236,46 @@ def setMerkers(sIP, iPort, sMerkers, iMerkerOffset=0):
     sock.close()
 
 @keyword(name='Read S7-1200 parameters')
-def read_S7_1200_parameters(IP):
+def readParameters(IP, scope):
     '''
-    The actual program when called by a script.
+    Read inputs, outputs and merkers when called by a script.
+    :param IP: target device IP
+    :param scope: INPUTS, OUTPUTS, MERKERS or ALL
     '''
     calledByRobot = True
     iPort = 102
     sIP = IP
-    global sIP, iPort
     if not isIpv4(sIP): 
         finish('Error: Wrong IP, please go read RFC 791 and then use a legitimate IPv4 address.')
-    getAllData(sIP, iPort)
+    if scope == 'ALL':
+        getAllData(sIP, iPort, calledByRobot)
+    elif scope == 'OUTPUTS':
+        getOutputData(sIP, iPort)
+    elif scope == 'INPUTS':
+        getInputData(sIP, iPort)
+    elif scope == 'MERKERS':
+        getMerkerData(sIP, iPort)
+    else:
+        finish('Received unknown read scope parameter from Robot. Exiting.')
 
+@keyword(name='Write to S7-1200 outputs')
+def writeToOutputs(IP, outputs):
+    '''
+    Write to S7-1200 outputs.
+    :param IP: target device IP
+    :param outputs: String of 1 or 0 values to be written to outputs, e.g. 10011
+    '''
+    iPort = 102
+    sIP = IP
+    if not isIpv4(sIP): 
+        finish('Error: Wrong IP, please go read RFC 791 and then use a legitimate IPv4 address.')
+    setOutputs(sIP, iPort, outputs)
 
-##### The actual program when called from commandline
 
 if __name__ == '__main__':
-    # The Banner
+    '''
+    The actual program when called from commandline
+    '''
     showBanner()
     parseArgs()
     if bRead:

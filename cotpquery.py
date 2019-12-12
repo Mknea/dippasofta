@@ -24,7 +24,7 @@ def getInfoViaCOTP(targetIP, calledbyrobot):
     cotpdata = send_and_recv(sock, '030000'+tpktlength+'02f080'+data)
     #print(cotpdata)
     ## It is sure that the CPU state is NOT in this response
-    parse_and_log_results(cotpdata, calledbyrobot)
+    parse_and_log_results(targetIP, cotpdata, calledbyrobot)
     sock.close()
 
 def send_and_recv(sock, strdata, sendOnly = False):
@@ -34,14 +34,14 @@ def send_and_recv(sock, strdata, sendOnly = False):
     ret = sock.recv(65000)
     return ret
 
-def parse_and_log_results(data, calledbyrobot):
+def parse_and_log_results(IP, data, calledbyrobot):
     t = Texttable()
-    t.add_row(['Hardware ID', 'Firmware version'])
+    t.add_row(['Target IP', 'Hardware ID', 'Firmware version'])
     hardware = data.split(';')[2]
     firmware = filter(lambda x: x in string.printable, data.split(';')[3].replace('@','.'))
-    t.add_row([hardware, firmware])
+    t.add_row([IP, hardware, firmware])
     t.set_max_width(0)
-    t.set_cols_dtype(["t", "t"])
+    t.set_cols_dtype(["t", "t", "t"])
     if (calledbyrobot):
         logger.warn("\n" + t.draw())
     else:
