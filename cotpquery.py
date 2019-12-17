@@ -5,7 +5,7 @@ Source: https://github.com/tijldeneut/ICSSecurityScripts/blob/master/FullSiemens
 '''
 
 __authors__ = "Aleksi Makinen and Tilj Deneut"
-__copyright__ = "Copyright 2019, Aleksi Mäkinen"
+__copyright__ = "Copyright 2019, Aleksi Makinen"
 __license__ = "GNU GPL v3"
 __version__ = "2.0"
 __status__ = "Development"
