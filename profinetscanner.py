@@ -128,7 +128,8 @@ def parse_load(data, src):
 def check_vendor_id(id):
     '''
     Compares the given vendor id (as dec integer) against CSV-table with vendor names tied to id's.
-    Returns the name as string on success, and otherwise an empty string. 
+    Returns the name as string on success, and otherwise an empty string.
+    :param: 
     '''
     try:
         with open('vendor_ID_table.csv', mode='r') as csv_file:
@@ -140,10 +141,47 @@ def check_vendor_id(id):
                         return row[" Vendor name"].strip()
     except EnvironmentError:
         print("VendorID table not provided.")
+    except:
+        print("Something went wrong when accessing vendorID table.")
 
+def check_device_type(device_id):
+    '''
+    Compares given device id to a dict of known id aliases.
+    :param device_id: The hex-code as a string
+    '''
+    deviceType = {
+        '0a01':     'Switch',
+        '0202':     'PCSIM',
+        '0203':     'S7-300 CP',
+        '0101':     'S7-300',
+        '010d':     'S7-1200',
+        '0301':     'HMI',
+        '010b':     'ET200S'
+    }
+    for key in deviceType:
+        if key == device_id:
+            return deviceType[key]
+    return ""
+
+def parse_device_role(device_role_code):
+    '''
+    Parses device role according to given binary representation
+    :param device_role_code: The role code in hex
+    '''
+    devrole = 'Unknown role'
+    try:
+        binaryID = bin(int(device_role_code, 10))[2:]
+        if int(binaryID) & 1 == 1: devrole = 'IO-Device '
+        elif int(binaryID) & 10 == 10: devrole = 'IO-Controller '
+        elif int(binaryID) & 100 == 100: devrole = 'IO-Multidevice '
+        elif int(binaryID) & 1000 == 1000: devrole = 'PN-Supervisor '
+        return devrole
+    except:
+        print("Encountered an error while trying to parse device role.")
+        return devrole
 
 def send_message(src_mac, cfg_dst_mac, src_iface):
-    ''' Create and send broadcast profinet packet '''
+    ''' Create and broadcast profinet packet '''
     payload =  'fefe 05 00 04010002 0080 0004 ffff 0000'
     payload = payload.replace(' ', '')
     payload = binascii.a2b_hex(payload)
@@ -193,7 +231,10 @@ def log_results(resultDict, calledByRobot = False):
         vendor = check_vendor_id(int(p['vendor_id'], 16))
         if vendor != "":
             p['vendor_id'] = p['vendor_id'] + " (" + vendor + ")"
-        
+        deviceID = check_device_type(p['device_id'])
+        if deviceID != "":
+            p['device_id'] = p['device_id'] + " (" + deviceID + ")"
+        p['device_role'] = p['device_role'] + " (" + parse_device_role(p['device_role']) + ")"
         t.add_row([mac, 
                 p['type_of_station'], 
                 p['name_of_station'], 
