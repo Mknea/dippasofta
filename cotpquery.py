@@ -3,6 +3,13 @@ File:   COTPRequest.py
 Desc:   
 Source: https://github.com/tijldeneut/ICSSecurityScripts/blob/master/FullSiemensScan.py
 '''
+
+__authors__ = "Aleksi Makinen and Tilj Deneut"
+__copyright__ = "Copyright 2019, Aleksi Mäkinen"
+__license__ = "GNU GPL v3"
+__version__ = "2.0"
+__status__ = "Development"
+
 import sys, socket, re, string
 import argparse
 from binascii import hexlify, unhexlify

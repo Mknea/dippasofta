@@ -1,30 +1,17 @@
 #! /usr/bin/env python
 '''
-	Copyright 2015 Photubias(c)
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-    ###### ------------------------------------------------------- ######
-    ###### --------------------- 2016-04-10 ---------------------- ######
-    File name S7-1200-Workshop.py
-    written by tijl[dot]deneut[at]howest[dot]be
-    This script works on both Linux and Windows
-    
-    Designed to be used as an inline script for manipulating
-        in- and outputs and merkers.
-        Only tested on S7-1200 series, before firmware v3 (no encryption)
+File:   S7-1200manipulator.py
+Desc:   Script for manipulating in- and outputs and merkers.
+        Previous author tested before firmware v3, now tested and confirmed to work on v4.2
+Source: https://github.com/tijldeneut/ICSSecurityScripts/blob/master/S7-1200-Workshop.py
 '''
+
+__authors__ = "Aleksi Makinen and Tilj Deneut"
+__copyright__ = "Copyright 2019, Aleksi Mäkinen"
+__license__ = "GNU GPL v3"
+__version__ = "2.0"
+__status__ = "Development"
+
 import os, sys, argparse, re, socket, binascii
 from robot.api import logger                # For Robot Framework prints
 from robot.api.deco import keyword          # Modifying Robot Framework keyword call
@@ -41,14 +28,11 @@ def showBanner():
     os.system('cls' if os.name == 'nt' else 'clear')
     print """
 [*****************************************************************************]
-                   This script works on both Linux and Windows
-
                             --- Siemens Hacker ---
                  This script reads in- and outputs and merkers
                       AND writes outputs and merkers.
             (For now only S7-1200 with Basic Firmware <= 3 is tested)
                             
-
 _______________________/-> Credit to Tijl Deneut(c) <-\_______________________
 [*****************************************************************************]
     """

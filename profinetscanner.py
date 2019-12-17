@@ -12,7 +12,11 @@ __copyright__ = "Copyright 2013, Positive Technologies"
 __license__ = "GNU GPL v3"
 __version__ = "2.0"
 __status__ = "Development"
-
+'''
+Credit goes also to Tijl Deneut's script:
+https://github.com/tijldeneut/ICSSecurityScripts/blob/master/FullSiemensScan.py
+Which implemented further parsing that was taken as reference when developing this script.
+'''
 import sys
 import time
 import threading
