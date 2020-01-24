@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-File:   profinet_scanner.py
+File:   profinetscanner.py
 Desc:   Scan subnet and find profinet-enabled devices (PLC, HMI), PC workstations.
         Extract network info, names, roles.
 Source: https://github.com/atimorin/scada-tools/blob/master/profinet_scanner.scapy.py
@@ -43,10 +43,11 @@ sniffed_packets = None
 args = None
 
 def get_src_iface():
+    ''' Returns the default network interface '''
     return conf.iface
 
 def get_src_mac(interface):
-    # Returns first MAC address found for given ETHERNET interface
+    ''' Returns first MAC address found for given interface '''
     try:
         return netifaces.ifaddresses(interface)[netifaces.AF_LINK][0]['addr']
     except ValueError:
@@ -54,6 +55,7 @@ def get_src_mac(interface):
         sys.exit(1)
 
 def sniff_packets(src_iface):
+    ''' Starts sniffing packets on given interface and saves them to global variable '''
     global sniffed_packets
     sniffed_packets = sniff(iface=src_iface, filter='ether proto 0x8892', timeout=cfg_sniff_time)
 
@@ -118,7 +120,6 @@ def parse_load(data, src):
         # Get the normal representation for IP addresses
         def transform_to_address(address):
             return socket.inet_ntoa(struct.pack(">L", int(address, 16)))
-
         ip_address  = transform_to_address(profinet_packet["IP"][12:20])
         subnet_mask = transform_to_address(profinet_packet["IP"][20:28])
         standard_gateway = transform_to_address(profinet_packet["IP"][28:36])
@@ -131,9 +132,9 @@ def parse_load(data, src):
 
 def check_vendor_id(id):
     '''
-    Compares the given vendor id (as dec integer) against CSV-table with vendor names tied to id's.
+    Compares the given vendor id against CSV-table with vendor names tied to id's.
     Returns the name as string on success, and otherwise an empty string.
-    :param: 
+    :param id: The vendor id as dec integer
     '''
     try:
         with open('vendor_ID_table.csv', mode='r') as csv_file:
@@ -145,8 +146,10 @@ def check_vendor_id(id):
                         return row[" Vendor name"].strip()
     except EnvironmentError:
         print("VendorID table not provided.")
+        return ""
     except:
         print("Something went wrong when accessing vendorID table.")
+        return ""
 
 def check_device_type(device_id):
     '''
@@ -185,13 +188,19 @@ def parse_device_role(device_role_code):
         return devrole
 
 def send_message(src_mac, cfg_dst_mac, src_iface):
-    ''' Create and broadcast profinet packet '''
+    '''
+    Creates and broadcasts PROFINET-DCP packet wrapped in Ethernet frame
+    :param src_mac:         Sending interface MAC address
+    :param cfg_dst_mac:     Target devices' MAC address
+    :param src_iface:       Interface from which frame is sent
+    '''
+    
     payload =  'fefe 05 00 04010002 0080 0004 ffff 0000'
     payload = payload.replace(' ', '')
     payload = binascii.a2b_hex(payload)
     pp = Ether(type=0x8892, src=src_mac, dst=cfg_dst_mac)/payload
     if (args != None):
-        if args.verbose.lower() == True:
+        if args.verbose == True:
             pp.show2()
     ans, unans = srp(pp, iface=src_iface)
 
@@ -200,6 +209,7 @@ def parse_results(src_mac):
     '''
     Checks that messagetype and sender match, and calls parser.
     Returns the results as dictionary with each separate response as its own key-dict pair.
+    :param src_mac: Sending interface MAC address
     '''
     result = {}
     for p in sniffed_packets:
@@ -232,13 +242,14 @@ def log_results(resultDict, calledByRobot = False):
     t.add_row(['mac address', 'type of station', 'name of station', 'vendor id', 'device id', 'device role', 'ip address', 'subnet mask', 'standard gateway'])
     for (mac, profinet_info) in resultDict.items():
         p = resultDict[mac]
-        vendor = check_vendor_id(int(p['vendor_id'], 16))
-        if vendor != "":
+        if p['vendor_id'] != "" and p['vendor_id']!= None:
+            vendor = check_vendor_id(int(p['vendor_id'], 16))
             p['vendor_id'] = p['vendor_id'] + " (" + vendor + ")"
-        deviceID = check_device_type(p['device_id'])
-        if deviceID != "":
+        if p['device_id'] != "" and p['device_id'] != None:
+            deviceID = check_device_type(p['device_id'])
             p['device_id'] = p['device_id'] + " (" + deviceID + ")"
-        p['device_role'] = p['device_role'] + " (" + parse_device_role(p['device_role']) + ")"
+        if p['device_role'] != "" and p['device_role'] != None:
+            p['device_role'] = p['device_role'] + " (" + parse_device_role(p['device_role']) + ")"
         t.add_row([mac, 
                 p['type_of_station'], 
                 p['name_of_station'], 
@@ -258,7 +269,7 @@ def log_results(resultDict, calledByRobot = False):
 @keyword(name='Run PROFINET scanner')
 def run_profinet_scanner(src_iface):
     '''
-    Used when called as python module (by Robot framework), runs the scanner.
+    Used when called as python module (by Robot framework), runs the scanner, and returns results in dictionary
     :param src_iface: The source network interface, for example eth0
     '''
     src_mac = get_src_mac(src_iface)
@@ -286,6 +297,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.verbose.lower() == "true":
         args.verbose = True
+    
     # Get the interface from user or use the first found interface
     src_iface = args.src_iface or get_src_iface()
     # Get MAC address for given interface
