@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 '''
 File:   S7-1200manipulator.py
-Desc:   Script for manipulating in- and outputs and merkers.
+Desc:   Script for manipulating in- and outputs and merkers of Siemens Simatic S7-1200.
         Previous author tested before firmware v3, now tested and confirmed to work on v4.2
 Source: https://github.com/tijldeneut/ICSSecurityScripts/blob/master/S7-1200-Workshop.py
 '''
@@ -37,9 +37,12 @@ _______________________/-> Credit to Tijl Deneut(c) <-\_______________________
 [*****************************************************************************]
     """
 
-def finish(sMessage=''):
-    print(str(sMessage))
-    sys.exit()
+def finish(sMessage='', calledByRobot = False):
+    if (calledByRobot):
+        logger.error("\n" + str(sMessage))
+    else:
+        print(str(sMessage))
+        sys.exit()
 
 
 def isIpv4(ip):
@@ -104,7 +107,14 @@ def printData(sWhat, s7Response, calledByRobot): ## Expects 4 byte hex data (e.g
     s7Data = s7Response[14:]
     datalength = int(s7Data[16:20], 16) ## Normally 5 bytes for a byte, 6 if we request word, 8 if we request real
     s7Items = s7Data[28:28 + datalength*2]
-    if not s7Items[:2] == 'ff': finish('Some error occured with S7Comm Data Read, full S7Comm data: ' + str(s7Data) + '\nFirmware not supported?\n')
+    if not s7Items[:2] == 'ff':
+        if (str(s7Data)[-4:] == '8104'):
+            finish('Received error code 0x8104 from the device.\n'\
+            'If target is S7-1200/1500: PUT/GET communication is not enabled for the target device.\n'\
+            'Otherwise: the function is not supported.', calledByRobot)
+        else:
+            finish('Some error occured with S7Comm Data Read, full S7Comm data: ' + str(s7Data) + '\n'\
+            'Firmware not supported?\n')
     if calledByRobot:
         log = '\n       ###--- ' + sWhat + ' ---###\n'
     else:
