@@ -3,8 +3,11 @@ File:   S7CommPlusScanner.py
 Desc:   Sends S7CommPlus connection request. Siemens devices utilising said protocol (such as S7-1200 and S7-1500)
         will answer with connection response. The response contains hardware ID and firmware version, which are obtained and printed.
         Note that the connection is not finalised, as it would require authenticating to the PLC with additional packets with encryption.
-        See 'The spear to break the security wall of S7CommPlus' by Lei et al. (2017) and 'Rogue7: Rogue Engineering-Station attacks on S7 Simatic PLCs' by Biham et al. (2019) for more information.
-        Mofidied to be callable through Robot Framework.
+        See
+        'The spear to break the security wall of S7CommPlus' by Lei et al. (2017)
+        and
+        'Rogue7: Rogue Engineering-Station attacks on S7 Simatic PLCs' by Biham et al. (2019) for more information.
+
 Source: https://github.com/tijldeneut/ICSSecurityScripts/blob/master/FullSiemensScan.py
 '''
 
