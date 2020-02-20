@@ -72,6 +72,8 @@ def parse_load(data, src):
     ip_address = None
     subnet_mask = None
     standard_gateway = None
+
+    profinet_packet = None
     try:
         data = hexlify(data)
         # First 8 bytes are followed by the length of the rest of the message:
@@ -94,7 +96,10 @@ def parse_load(data, src):
                     block_bounds[i+1][0] = block_bounds[i][1] + 2
                 else:
                     block_bounds[i+1][0] = block_bounds[i][1]
-
+            # In some messages 'Device Instance' field was missing, the parsing must end if IP field (0x0102) is already reached
+            if (i == 5):
+                if (data[block_bounds[5][0]:(block_bounds[5][0] + 4)] == '0102'):
+                    break
         #Device_options_block_length = int(data[28:32])
         # Get each block of message to their own dict entry based on bounds
         profinet_packet = {
@@ -102,10 +107,13 @@ def parse_load(data, src):
             "Device_specific":        data[block_bounds[1][0]:block_bounds[1][1]],
             "Device_nameofstation":   data[block_bounds[2][0]:block_bounds[2][1]],
             "Device_ID":              data[block_bounds[3][0]:block_bounds[3][1]],
-            "Device_role":            data[block_bounds[4][0]:block_bounds[4][1]],
-            "Device_instance":        data[block_bounds[5][0]:block_bounds[5][1]],
-            "IP":                     data[block_bounds[6][0]:block_bounds[6][1]]
+            "Device_role":            data[block_bounds[4][0]:block_bounds[4][1]]
         }
+        if (i == 5): # Device instance field was missing
+            profinet_packet.update({"IP": data[block_bounds[5][0]:block_bounds[5][1]]})
+        else:
+            profinet_packet.update([("Device_instance", data[block_bounds[5][0]:block_bounds[5][1]]),
+                                    ("IP",              data[block_bounds[6][0]:block_bounds[6][1]])])
         #print(profinet_packet)
         def get_block_length(key):
             return (int(profinet_packet[key][4:8], 16))*2
@@ -127,7 +135,9 @@ def parse_load(data, src):
     except:
         if (args != None):
             if args.verbose == True:
+                print("Error occurred during the parsing of the received message:")
                 print("%s:\n %s At line: %s" %(src, str(sys.exc_info()), str(sys.exc_info()[2].tb_lineno)))
+                if (profinet_packet != None): print(profinet_packet)
     return type_of_station, name_of_station, vendor_id, device_id, device_role, ip_address, subnet_mask, standard_gateway
 
 def check_vendor_id(id):
@@ -238,17 +248,18 @@ def log_results(resultDict, calledByRobot = False):
     :param calledFromCommandPrompt: Bool, Used to signal the need to print with warning status (for robot). Default false.
     '''
     print("found {:d} devices".format(len(resultDict)))
+    if len(resultDict) == 0: return
     t = Texttable()
     t.add_row(['mac address', 'type of station', 'name of station', 'vendor id', 'device id', 'device role', 'ip address', 'subnet mask', 'standard gateway'])
-    for (mac, profinet_info) in resultDict.items():
+    for mac in resultDict.keys():
         p = resultDict[mac]
-        if p['vendor_id'] != "" and p['vendor_id']!= None:
+        if p['vendor_id']!= None:
             vendor = check_vendor_id(int(p['vendor_id'], 16))
             p['vendor_id'] = p['vendor_id'] + " (" + vendor + ")"
-        if p['device_id'] != "" and p['device_id'] != None:
+        if p['device_id'] != None:
             deviceID = check_device_type(p['device_id'])
             p['device_id'] = p['device_id'] + " (" + deviceID + ")"
-        if p['device_role'] != "" and p['device_role'] != None:
+        if p['device_role'] != None:
             p['device_role'] = p['device_role'] + " (" + parse_device_role(p['device_role']) + ")"
         t.add_row([mac, 
                 p['type_of_station'], 
@@ -261,10 +272,10 @@ def log_results(resultDict, calledByRobot = False):
                 p['standard_gateway']])
         t.set_max_width(0)
         t.set_cols_dtype(["t", "t", "t", "t", "t", "t", "t", "t", "t"])
-        if (calledByRobot):
-            logger.warn("\n" + t.draw())
-        else:
-            print(t.draw())
+    if (calledByRobot):
+        logger.warn("\n" + t.draw())
+    else:
+        print(t.draw())
 
 @keyword(name='Run PROFINET scanner')
 def run_profinet_scanner(src_iface):

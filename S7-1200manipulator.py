@@ -3,6 +3,7 @@
 File:   S7-1200manipulator.py
 Desc:   Script for manipulating in- and outputs and merkers of Siemens Simatic S7-1200.
         Previous author tested before firmware v3, now tested and confirmed to work on v4.2
+        Works if PLC protection level is set to 'HMI', 'read' or 'full-access'.
 Source: https://github.com/tijldeneut/ICSSecurityScripts/blob/master/S7-1200-Workshop.py
 '''
 
@@ -232,7 +233,7 @@ def setMerkers(sIP, iPort, sMerkers, iMerkerOffset=0):
 @keyword(name='Read S7-1200 parameters')
 def readParameters(IP, scope):
     '''
-    Read inputs, outputs and merkers when called by a script.
+    Read inputs, outputs and merkers when called by external script.
     :param IP: target device IP
     :param scope: INPUTS, OUTPUTS, MERKERS or ALL
     '''
@@ -255,14 +256,14 @@ def readParameters(IP, scope):
 @keyword(name='Write to S7-1200 outputs')
 def writeToOutputs(IP, outputs):
     '''
-    Write to S7-1200 outputs.
+    Writes to S7-1200 outputs. Note that different models may have varying number of available outputs.
     :param IP: target device IP
     :param outputs: String of 1 or 0 values to be written to outputs, e.g. 10011
     '''
     iPort = 102
     sIP = IP
     if not isIpv4(sIP): 
-        finish('Error: Wrong IP, please go read RFC 791 and then use a legitimate IPv4 address.')
+        finish('Error: Wrong IP, please go read RFC 791 and then use a legitimate IPv4 address.', True)
     setOutputs(sIP, iPort, outputs)
 
 
