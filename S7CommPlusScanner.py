@@ -24,34 +24,40 @@ from robot.api.deco import keyword          # Modifying Robot Framework keyword 
 from texttable import Texttable             # Printing result to table
 from robot.api import logger 
 
+def finish(sMessage='', calledByRobot = False):
+    if (calledByRobot):
+        logger.error("\n" + str(sMessage))
+    else:
+        print(str(sMessage))
+        sys.exit()
+
 @keyword(name='Run S7CommPlus scanner')
-def run_scanner(targetIP, calledbyrobot = False):
+def run_scanner(targetIP, calledByRobot = False):
     '''
     Handles sending and reception of the packets, and calls parsing and also logging when called through command-prompt.
     When called through Robot Framework, returns a dictionary containing the results of the scan.
     '''
     if not isIpv4(targetIP):
-        logger.error('One or more addresses were wrong. \nPlease go read RFC 791 and then use a legitimate IPv4 address.')
-        raise ValueError
+        finish('One or more addresses were wrong. \nPlease go read RFC 791 and then use a legitimate IPv4 address.', True)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(1) # 1 second timeout
-    sock.connect((targetIP, 102)) ## Will setup TCP/SYN with port 102
+    timeoutValue = 1 # seconds
+    sock.settimeout(timeoutValue)
+    try:
+        sock.connect((targetIP, 102)) ## Will setup TCP/SYN with port 102
+    except socket.timeout:
+        finish("Socket timeout. Did not receive response within the defined " + str(timeoutValue) + "s timeout.", calledByRobot)
     cotpconnectresponse = hexlify(send_and_recv(sock, '03000016'+'11e00000000500c1020600c2020600c0010a'))
     if not cotpconnectresponse[10:12] == 'd0':
-        if (calledbyrobot):
-            logger.error("Did not get response to initial COTP connection request. No route to IP" + targetIP + "?")
-        else:
-            print('COTP Connection Request failed, no route to IP '+ targetIP +'?')
-        return []
-
+        finish("Did not get correct response to initial COTP connection request. No route to IP:" + targetIP + "?", calledByRobot)
+        raise ValueError
     data = '720100b131000004ca0000000200000120360000011d00040000000000a1000000d3821f0000a3816900151653657276657253657373696f6e5f3742363743433341a3822100150b313a3a3a362e303a3a3a12a3822800150d4f4d532b204465627567676572a38229001500a3822a001500a3822b00048480808000a3822c001211e1a304a3822d001500a1000000d3817f0000a38169001515537562736372697074696f6e436f6e7461696e6572a2a20000000072010000'
     tpktlength = str(hex((len(data)+14)/2))[2:] ## Dynamically find out the data length
     cotpdata = send_and_recv(sock, '030000'+tpktlength+'02f080'+data)
     ## It is sure that the CPU state is NOT in this response
     result = parse_results(targetIP, cotpdata)
     sock.close()
-    if (calledbyrobot):
+    if (calledByRobot):
         return result
     else:
         log_results(result)
@@ -80,14 +86,14 @@ def parse_results(IP, data):
     return {"IP": IP, "hardware": hardware, "firmware": firmware}
 
 @keyword(name='Log S7CommPlus scanner results')
-def log_results(dataDict, calledbyrobot = False):
+def log_results(dataDict, calledByRobot = False):
     ''' Prints a table with the given dictionary. '''
     t = Texttable()
     t.add_row(['Target IP', 'Hardware ID', 'Firmware version'])
     t.add_row([dataDict["IP"], dataDict["hardware"], dataDict["firmware"]])
     t.set_max_width(0)
     t.set_cols_dtype(["t", "t", "t"])
-    if (calledbyrobot):
+    if (calledByRobot):
         logger.warn("\n" + t.draw())
     else:
         print(t.draw())

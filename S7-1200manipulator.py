@@ -91,10 +91,14 @@ def sendAndRecv(sock, strdata, sendOnly = False):
     ret = sock.recv(iBUFFER)
     return ret
 
-def setupConnection(sIP, iPort):
+def setupConnection(sIP, iPort, calledByRobot=False):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(1)
-    sock.connect((sIP, iPort))
+    timeoutValue = 1
+    sock.settimeout(timeoutValue)
+    try:
+        sock.connect((sIP, iPort))
+    except socket.timeout:
+        finish("Socket timeout. Did not receive response within the defined " + str(timeoutValue) + "s timeout.", calledByRobot)
     ## Always start with a COTP CR (Connection Request), we need a CS (Connection Success) back
     cotpsync = binascii.hexlify(sendAndRecv(sock, '03000016' + '11e00000000100c0010ac1020100c2020101'))
     if not cotpsync[10:12] == 'd0': finish('COTP Sync failed, PLC not reachable?')
@@ -143,7 +147,7 @@ def printData(sWhat, s7Response, calledByRobot): ## Expects 4 byte hex data (e.g
 
 def getAllData(sIP, iPort, calledByRobot = False):
     ## Setup the connection
-    sock = setupConnection(sIP, iPort)
+    sock = setupConnection(sIP, iPort, calledByRobot)
     
     ## First 4 bytes are TPKT (last byte==datalength), next 3 bytes are COTP, last 24 bytes are S7Comm Read Var.
     ##   Request Byte (02) or Word (04) or Dword (06)
@@ -164,27 +168,27 @@ def getAllData(sIP, iPort, calledByRobot = False):
     sock.close()
 
 def getOutputData(sIP, iPort):
-    sock = setupConnection(sIP, iPort)
+    sock = setupConnection(sIP, iPort, True)
     ## Outputs (82)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 82 000000'.replace(' ','')))
     printData('Outputs',s7Response, True)
     sock.close()
 
 def getInputData(sIP, iPort):
-    sock = setupConnection(sIP, iPort)
+    sock = setupConnection(sIP, iPort, True)
     ## Inputs (81)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 81 000000'.replace(' ','')))
     printData('Inputs',s7Response, True)
     sock.close()
 
 def getMerkerData(sIP, iPort):
-    sock = setupConnection(sIP, iPort)
+    sock = setupConnection(sIP, iPort, True)
     ## Merkers (83)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 83 000000'.replace(' ','')))
     printData('Merkers',s7Response, True)
     sock.close()
 
-def setOutputs(sIP, iPort, sOutputs):
+def setOutputs(sIP, iPort, sOutputs, calledByRobot = False):
     ## Outputs need to be reversed before sending: ('11001000' must become '00010011')
     sOutputs = sOutputs[::-1]
     ## Converted to hexstring ('00010011' becomes '13')
@@ -192,7 +196,7 @@ def setOutputs(sIP, iPort, sOutputs):
     if len(hexstring) == 1: hexstring = '0' + hexstring # Add leading zero
     
     ## Setup the connection
-    sock = setupConnection(sIP, iPort)
+    sock = setupConnection(sIP, iPort, calledByRobot)
 
     ## Set Outputs
     ## First 4 bytes are TPKT (last byte==datalength), next 3 bytes are COTP, last 24 bytes are S7Comm Set Var, last byte contains data to send!
@@ -201,7 +205,7 @@ def setOutputs(sIP, iPort, sOutputs):
     else: print('Error writing outputs.')
     sock.close()
 
-def setMerkers(sIP, iPort, sMerkers, iMerkerOffset=0):
+def setMerkers(sIP, iPort, sMerkers, iMerkerOffset=0, calledByRobot = False):
     ## Outputs need to be reversed before sending: ('11001000' must become '00010011')
     sMerkers = sMerkers[::-1]
     ## Converted to hexstring ('00010011' becomes '13')
@@ -209,7 +213,7 @@ def setMerkers(sIP, iPort, sMerkers, iMerkerOffset=0):
     if len(hexstring) == 1: hexstring = '0' + hexstring # Add leading zero
     
     ## Setup the connection
-    sock = setupConnection(sIP, iPort)
+    sock = setupConnection(sIP, iPort, calledByRobot)
 
     ## Set Merkers
     ## First 4 bytes are TPKT (last byte==datalength), next 3 bytes are COTP, last bytes are S7Comm Write Var, '83' is Merker, last bytes contain data to send!
@@ -263,7 +267,7 @@ def writeToOutputs(IP, outputs):
     iPort = 102
     if not isIpv4(IP): 
         finish('Error: Wrong IP, please go read RFC 791 and then use a legitimate IPv4 address.', True)
-    setOutputs(IP, iPort, outputs)
+    setOutputs(IP, iPort, outputs, True)
 
 @keyword(name='Write to S7-1200 merkers')
 def writeToMerkers(IP, merkers, offset=0):
@@ -284,7 +288,7 @@ def writeToMerkers(IP, merkers, offset=0):
 
     if (offset < 0 or offset > 3):
         finish('Error: Given merker offset:' + offset + ' is out of bounds. Use values 0-3.', True)
-    setMerkers(IP, iPort, merkers, offset)
+    setMerkers(IP, iPort, merkers, offset, True)
 
 if __name__ == '__main__':
     '''
