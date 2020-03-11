@@ -174,14 +174,14 @@ def getInputData(sIP, iPort):
     sock = setupConnection(sIP, iPort)
     ## Inputs (81)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 81 000000'.replace(' ','')))
-    printData('Inputs',s7Response, calledByRobot)
+    printData('Inputs',s7Response, True)
     sock.close()
 
 def getMerkerData(sIP, iPort):
     sock = setupConnection(sIP, iPort)
     ## Merkers (83)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 83 000000'.replace(' ','')))
-    printData('Merkers',s7Response, calledByRobot)
+    printData('Merkers',s7Response, True)
     sock.close()
 
 def setOutputs(sIP, iPort, sOutputs):
@@ -251,7 +251,7 @@ def readParameters(IP, scope):
     elif scope == 'MERKERS':
         getMerkerData(sIP, iPort)
     else:
-        finish('Received unknown read scope parameter from Robot. Exiting.')
+        finish('Received unknown read scope parameter from Robot. Exiting.', True)
 
 @keyword(name='Write to S7-1200 outputs')
 def writeToOutputs(IP, outputs):
@@ -261,11 +261,30 @@ def writeToOutputs(IP, outputs):
     :param outputs: String of 1 or 0 values to be written to outputs, e.g. 10011
     '''
     iPort = 102
-    sIP = IP
-    if not isIpv4(sIP): 
+    if not isIpv4(IP): 
         finish('Error: Wrong IP, please go read RFC 791 and then use a legitimate IPv4 address.', True)
-    setOutputs(sIP, iPort, outputs)
+    setOutputs(IP, iPort, outputs)
 
+@keyword(name='Write to S7-1200 merkers')
+def writeToMerkers(IP, merkers, offset=0):
+    '''
+    Writes to S7-1200 merkers.
+    :param IP: target device IP
+    :param merkers: String of values to be written to merkers.
+    :param offset: The offset on which parameters are written
+    (e.g. 10101010,3 to set merkers 3.0 through 3.7,
+    or 111, 2 to set merkers 2.0 through 2.2)
+    '''
+    iPort = 102
+    if not isIpv4(IP): 
+        finish('Error: Wrong IP, please go read RFC 791 and then use a legitimate IPv4 address.', True)
+    
+    try: offset = int(offset)
+    except:finish('Error: Merker offset is not a decimal (' + offset + ')', True)
+
+    if (offset < 0 or offset > 3):
+        finish('Error: Given merker offset:' + offset + ' is out of bounds. Use values 0-3.', True)
+    setMerkers(IP, iPort, merkers, offset)
 
 if __name__ == '__main__':
     '''
