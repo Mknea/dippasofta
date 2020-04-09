@@ -98,7 +98,7 @@ def setupConnection(sIP, iPort, calledByRobot=False):
     try:
         sock.connect((sIP, iPort))
     except socket.timeout:
-        finish("Socket timeout. Did not receive response within the defined " + str(timeoutValue) + "s timeout.", calledByRobot)
+        finish("Socket timeout. Did not receive response from " +sIP+ " within the defined " + str(timeoutValue) + "s timeout.", calledByRobot)
     ## Always start with a COTP CR (Connection Request), we need a CS (Connection Success) back
     cotpsync = binascii.hexlify(sendAndRecv(sock, '03000016' + '11e00000000100c0010ac1020100c2020101'))
     if not cotpsync[10:12] == 'd0': finish('COTP Sync failed, PLC not reachable?')
@@ -107,18 +107,20 @@ def setupConnection(sIP, iPort, calledByRobot=False):
     if not s7comsetup[18:20] == '00': finish('Some error occured with S7Comm setup, full data: ' + s7comsetup)
     return sock
 
-def printData(sWhat, s7Response, calledByRobot): ## Expects 4 byte hex data (e.g. 00000000)
+def printData(sWhat, s7Response, sIP, calledByRobot): ## Expects 4 byte hex data (e.g. 00000000)
     if not s7Response[18:20] == '00': finish('Some error occured with S7Comm Setup, full response: ' + str(s7Response) + '\n')
     s7Data = s7Response[14:]
     datalength = int(s7Data[16:20], 16) ## Normally 5 bytes for a byte, 6 if we request word, 8 if we request real
     s7Items = s7Data[28:28 + datalength*2]
     if not s7Items[:2] == 'ff':
         if (str(s7Data)[-4:] == '8104'):
-            finish('Received error code 0x8104 from the device.\n'\
+            finish('Received error code 0x8104 from the device in '+ sIP +'.\n'\
             'If target is S7-1200/1500: PUT/GET communication is not enabled for the target device.\n'\
             'Otherwise: the function is not supported.', calledByRobot)
+            raise ValueError
         else:
-            finish('Some error occured with S7Comm Data Read, full S7Comm data: ' + str(s7Data) + '\n'\
+            finish('Some error occured with S7Comm Data Read for response from '+sIP+','\
+            'full S7Comm data:\n' + str(s7Data) + '\n'\
             'Firmware not supported?\n')
     if calledByRobot:
         log = '\n       ###--- ' + sWhat + ' ---###\n'
@@ -156,36 +158,36 @@ def getAllData(sIP, iPort, calledByRobot = False):
     
     ## Get Inputs in Dword (so 32 inputs) starting from Address 0
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 81 000000'.replace(' ','')))
-    printData('Inputs',s7Response, calledByRobot)
+    printData('Inputs',s7Response, sIP, calledByRobot)
 
     ## Outputs (82)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 82 000000'.replace(' ','')))
-    printData('Outputs',s7Response, calledByRobot)
+    printData('Outputs',s7Response, sIP, calledByRobot)
 
     ## Merkers (83)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 83 000000'.replace(' ','')))
-    printData('Merkers',s7Response, calledByRobot)
+    printData('Merkers',s7Response, sIP, calledByRobot)
     sock.close()
 
 def getOutputData(sIP, iPort):
     sock = setupConnection(sIP, iPort, True)
     ## Outputs (82)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 82 000000'.replace(' ','')))
-    printData('Outputs',s7Response, True)
+    printData('Outputs',s7Response, sIP, True)
     sock.close()
 
 def getInputData(sIP, iPort):
     sock = setupConnection(sIP, iPort, True)
     ## Inputs (81)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 81 000000'.replace(' ','')))
-    printData('Inputs',s7Response, True)
+    printData('Inputs',s7Response, sIP, True)
     sock.close()
 
 def getMerkerData(sIP, iPort):
     sock = setupConnection(sIP, iPort, True)
     ## Merkers (83)
     s7Response = binascii.hexlify(sendAndRecv(sock, '0300001f' + '02f080' + '32010000732f000e00000401120a10 06 00010000 83 000000'.replace(' ','')))
-    printData('Merkers',s7Response, True)
+    printData('Merkers',s7Response, sIP, True)
     sock.close()
 
 def setOutputs(sIP, iPort, sOutputs, calledByRobot = False):

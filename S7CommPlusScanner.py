@@ -46,7 +46,7 @@ def run_scanner(targetIP, calledByRobot = False):
     try:
         sock.connect((targetIP, 102)) ## Will setup TCP/SYN with port 102
     except socket.timeout:
-        finish("Socket timeout. Did not receive response within the defined " + str(timeoutValue) + "s timeout.", calledByRobot)
+        finish("Socket timeout. Did not receive response from "+sIP+" within the defined " + str(timeoutValue) + "s timeout.", calledByRobot)
     cotpconnectresponse = hexlify(send_and_recv(sock, '03000016'+'11e00000000500c1020600c2020600c0010a'))
     if not cotpconnectresponse[10:12] == 'd0':
         finish("Did not get correct response to initial COTP connection request. No route to IP:" + targetIP + "?", calledByRobot)
