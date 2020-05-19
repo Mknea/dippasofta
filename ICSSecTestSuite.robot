@@ -28,9 +28,11 @@ SiemensScanTestCase
     Scan for S7CommPlus devices     ${IPAddressList}
     #Search and display vulnerabilities
 SimaticS7ExploitTestCase
-    Read Simatic PLC parameters     ${targetIP}
-    Write to Simatic PLC outputs    ${targetIP}     ${newOutputValues}
-    Write to Simatic PLC merkers    ${targetIP}     ${newMerkerValues}      ${merkerOffset}
+    [Documentation]                 Reads the parameters of the S7 device in the given IP address.
+    ...                             Afterwards both outputs and merkers are written to with given parameters.
+    Read S7 PLC parameters     ${targetIP}
+    Write to S7 PLC outputs    ${targetIP}     ${newOutputValues}
+    Write to S7 PLC merkers    ${targetIP}     ${newMerkerValues}      ${merkerOffset}
 
 ***Keywords***
 Search and display vulnerabilities
@@ -55,8 +57,8 @@ Scan for S7CommPlus devices
     [Documentation]     Sends S7CommPlus-protocol 'connection request'-packet to the IP addresses in given array.Siemens devices
     ...                 such as S7-1200 and S7-1500 respond with additional information.
     [Arguments]         ${IPAddressList}
-    :FOR    ${TARGET_IP}    IN      @{IPAddressList}
-            ${result} =                         Run S7CommPlus scanner         ${TARGET_IP}         ${TRUE}
+    :FOR    ${IP}    IN      @{IPAddressList}
+            ${result} =                         Run S7CommPlus scanner         ${IP}         ${TRUE}
             Log S7CommPlus scanner results      ${result}                      ${TRUE}
     END
 
@@ -87,14 +89,14 @@ Append to list from dict
     ${Value}=           Get From Dictionary     ${Dictionary}       ${Key}
     Append To List      ${List}                 ${Value}
 
-Read Simatic PLC parameters
+Read S7 PLC parameters
     [Documentation]     Attempts to read Siemens Simatic S7-1200 outputs, inputs and merkers
     ...                 through S7Comm protocol.
     ...                 Can be optionally used to read just one area at a time: (ALL/INPUTS/OUTPUTS/MERKERS)
     [Arguments]         ${IP}   ${SCOPE}=ALL
     Read S7-1200 parameters     ${IP}       ${SCOPE}
 
-Write to Simatic PLC outputs
+Write to S7 PLC outputs
     [Documentation]     Attempts to write to Siemens Simatic S7-1200 outputs.
     ...                 Accepts string of 1 or 0 values to be written.
     ...                 Afterwards values are read to see operations success.
@@ -102,9 +104,9 @@ Write to Simatic PLC outputs
     Write to S7-1200 outputs    ${IP}       ${newOutputValues}
     ${INFO}=                    Format string       Wrote {output} to {ip} outputs      output=${newOutputValues}        ip=${IP}
     log                         ${INFO}             WARN
-    Read Simatic PLC parameters     ${IP}   OUTPUTS
+    Read S7 PLC parameters     ${IP}   OUTPUTS
 
-Write to Simatic PLC merkers
+Write to S7 PLC merkers
     [Documentation]     Attempts to write to Siemens Simatic S7-1200 first 32 merkers (flag bits).
     ...                 Accepts string of 1 or 0 values to be written, with optional offset 0 - 3 (4 bytes).
     ...                 Afterwards values are read to see operations success.
@@ -112,4 +114,4 @@ Write to Simatic PLC merkers
     Write to S7-1200 merkers    ${IP}       ${newMerkerValues}      ${offset}
     ${INFO}=                    Format string       Wrote {output} to {ip} merkers with offset {offset}     output=${newMerkerValues}   ip=${IP}    offset=${offset}
     log                         ${INFO}             WARN
-    Read Simatic PLC parameters     ${IP}   MERKERS
+    Read S7 PLC parameters     ${IP}   MERKERS
