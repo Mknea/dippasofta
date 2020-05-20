@@ -4,15 +4,15 @@ Desc:   Sends S7CommPlus connection request. Siemens devices utilising said prot
         will answer with connection response. The response contains hardware ID and firmware version, which are obtained and printed.
         Note that the connection is not finalised, as it would require authenticating to the PLC with additional packets with encryption.
         See
-        'The spear to break the security wall of S7CommPlus' by Lei et al. (2017)
-        and
-        'Rogue7: Rogue Engineering-Station attacks on S7 Simatic PLCs' by Biham et al. (2019) for more information.
+        'The spear to break the security wall of S7CommPlus' by Lei et al. (2017) and
+        'Rogue7: Rogue Engineering-Station attacks on S7 Simatic PLCs' by Biham et al. (2019) 
+        for more information.
 
 Source: https://github.com/tijldeneut/ICSSecurityScripts/blob/master/FullSiemensScan.py
 '''
 
 __authors__ = "Aleksi Makinen and Tilj Deneut"
-__copyright__ = "Copyright 2019, Aleksi Makinen"
+__copyright__ = "orig. Copyright 2019 Photubias, Copyright 2019 Aleksi Makinen"
 __license__ = "GNU GPL v3"
 __version__ = "2.0"
 __status__ = "Development"

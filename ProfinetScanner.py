@@ -8,7 +8,7 @@ Source: https://github.com/atimorin/scada-tools/blob/master/profinet_scanner.sca
 """
 
 __authors__ = "Aleksi Makinen and Aleksandr Timorin"
-__copyright__ = "Copyright 2013, Positive Technologies"
+__copyright__ = "orig. Copyright 2013 Positive Technologies, Copyright 2019, Aleksi Makinen"
 __license__ = "GNU GPL v3"
 __version__ = "2.0"
 __status__ = "Development"
